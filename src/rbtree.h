@@ -44,7 +44,17 @@ void postOrder(rbtree *, node_t *);
 // 노드, 트리 통째로 삭제 함수
 void postOrderDelete(rbtree *, node_t *);
 
-// 중위 순회 함수
+// 중위 순회 + arr에 담기 함수
 void inOrder(const rbtree *t, key_t *arr, const size_t n, size_t *index, node_t *cur);
+
+// 삭제 fixup 함수
+void rbtree_erase_fixup(rbtree *, node_t *);
+
+// 노드 대체 함수
+void rbtree_transplant(rbtree *, node_t *, node_t *);
+
+// 후임자 찾기 함수
+node_t *node_successor(rbtree *, node_t *);
+
 
 #endif  // _RBTREE_H_

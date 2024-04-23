@@ -258,11 +258,197 @@ node_t *rbtree_max(const rbtree *t) {
 int rbtree_erase(rbtree *t, node_t *p) {
 
   // TODO: implement erase
-  // node_t *cur = t->root;
-  
+  node_t *x;
+  node_t *y = p;
+  color_t y_origin_color = y->color;
+
+  // 자녀가 1개 이하일 때 
+  if(p->left == t->nil) {
+    x = p->right;
+    rbtree_transplant(t, p, p->right);
+  }
+  else if(p->right == t->nil) {
+    x = p->left;
+    rbtree_transplant(t, p, p->left);
+  }
+
+  // 자녀가 2개일 때
+  else {
+    // 후임자 y에 담기
+    y = node_successor(t, p);
+    y_origin_color = y->color;
+
+    // x는 y자식이다
+    x = y->right;
+
+    // y가 삭제노드 자식이면 x는 y의 right에 그대로 연결되어 있다
+    if(y->parent == p) {
+      x->parent = y;
+    }
+    else {
+      // 아닐 경우 y자식을 y자리에 대체한다
+      rbtree_transplant(t, y, y->right);
+
+      // 삭제노드 right 자식을 y에 달기
+      y->right = p->right;
+      y->right->parent = y;
+    }
+    
+    // y를 삭제노드 자리로 옮기기
+    rbtree_transplant(t, p, y);
+    y->left = p->left;
+    y->left->parent = y;
+    y->color = p->color;
+  }
+
+  // 노드 삭제 후 메모리 반환
+  free(p);
+  p = NULL;
+
+  // y 원래 자리를 x가 대체했는데 삭제된 색이 black이라면 x가 doubly black 또는 red and black 이므로 fixup 실행
+  if(y_origin_color == RBTREE_BLACK) {
+    rbtree_erase_fixup(t, x);
+  }
   return 0;
 }
 
+
+
+// x가 red(red and black)라면 while문 넘겨서 바로 black
+// x가 black(doubly black)이라면 while문 진행
+void rbtree_erase_fixup(rbtree *t, node_t *p) {
+
+  // p가 root거나 red and black이라면 조건 없이 black으로 바꾸기
+  while(p != t->root && p->color == RBTREE_BLACK) {
+    node_t *w;
+
+    // 형제 지정
+    if(p == p->parent->left) {
+      w = p->parent->right;
+      
+      // case 1 : 형제가 red일 경우, 색깔 바꾸고 부모기준 돌리기
+      // 형제가 black 되었으므로 case 2, 3, 4 중 한개 하기
+      if(w->color == RBTREE_RED) {
+        w->color = RBTREE_BLACK;
+        p->parent->color = RBTREE_RED;
+
+        left_rotate(t, p->parent);
+        // 돌렸으니 형제 재지정
+        w = p->parent->right;
+      }
+
+      // case 2 : 형제가 black인데 형제 자식도 다 black인 경우, 나/형제꺼 black 올리기
+      // 올린후 부모 기준으로 "처음부터" 시작하기
+      if(w->left->color == RBTREE_BLACK && w->right->color == RBTREE_BLACK) {
+        // doubly는 정상 black이 되니까 색깔변경 안함, 형제만 red가 됨
+        w->color = RBTREE_RED;
+        // 부모에게 extra black 줬으니 부모부터 다시 시작한다
+        p = p->parent;
+      }
+      // case 3: 형제의 red자식이 꺾여있을 경우
+      else if(w->right->color == RBTREE_BLACK) {
+        // 형제와 형제자식 색 바꾸고 회전 ( 1자로 만들기 )
+        w->left->color = RBTREE_BLACK;
+        w->color = RBTREE_RED;
+        right_rotate(t, w);
+
+        // case 3 이후엔 case 4를 꼭 해야 한다.
+        // 형제 재지정 후 case 4 실행
+        w = p->parent->right;
+        
+        // 형제는 부모 색 물려받기
+        // 부모/형제자식은 black으로 만들고 회전
+        // 이러면 doubly는 없어진다.
+        w->color = p->parent->color;
+        p->parent->color = RBTREE_BLACK;
+        w->right->color = RBTREE_BLACK;
+        left_rotate(t, p->parent);
+        
+        // case 4를 했으면 무조건 doubly가 없어지므로, while문 탈출을 위해 root를 넣어준다.
+        p = t->root;
+      }
+
+      // case 4 : 형제는 black, 형제 red자식이 1자일 경우
+      else {
+        // 형제는 부모 색 물려받기
+        // 부모/형제자식은 black으로 만들고 회전
+        // 이러면 doubly는 없어진다.
+        w->color = p->parent->color;
+        p->parent->color = RBTREE_BLACK;
+        w->right->color = RBTREE_BLACK;
+        left_rotate(t, p->parent);
+        
+        // case 4를 했으면 무조건 doubly가 없어지므로, while문 탈출을 위해 root를 넣어준다.
+        p = t->root;
+      }
+    }
+
+
+    //////////////////////////반대 경우//////////////////////////////////
+    else {
+      w = p->parent->left;
+      
+      // case 1 : 형제가 red일 경우, 색깔 바꾸고 부모기준 돌리기
+      // 형제가 black 되었으므로 case 2, 3, 4 중 한개 하기
+      if(w->color == RBTREE_RED) {
+        w->color = RBTREE_BLACK;
+        p->parent->color = RBTREE_RED;
+
+        right_rotate(t, p->parent);
+        // 돌렸으니 형제 재지정
+        w = p->parent->left;
+      }
+
+      // case 2 : 형제가 black인데 형제 자식도 다 black인 경우, 나/형제꺼 black 올리기
+      // 올린후 부모 기준으로 "처음부터" 시작하기
+      if(w->left->color == RBTREE_BLACK && w->right->color == RBTREE_BLACK) {
+        // doubly는 정상 black이 되니까 색깔변경 안함, 형제만 red가 됨
+        w->color = RBTREE_RED;
+        // 부모에게 extra black 줬으니 부모부터 다시 시작한다
+        p = p->parent;
+      }
+      // case 3: 형제의 red자식이 꺾여있을 경우
+      else if(w->left->color == RBTREE_BLACK) {
+        // 형제와 형제자식 색 바꾸고 회전 ( 1자로 만들기 )
+        w->right->color = RBTREE_BLACK;
+        w->color = RBTREE_RED;
+        left_rotate(t, w);
+        // case 3 이후엔 case 4를 꼭 해야 한다.
+
+
+
+        // 형제 재지정 후 case 4 실행
+        w = p->parent->left;
+        
+        // 형제는 부모 색 물려받기
+        // 부모/형제자식은 black으로 만들고 회전
+        // 이러면 doubly는 없어진다.
+        w->color = p->parent->color;
+        p->parent->color = RBTREE_BLACK;
+        w->left->color = RBTREE_BLACK;
+        right_rotate(t, p->parent);
+        
+        // case 4를 했으면 무조건 doubly가 없어지므로, while문 탈출을 위해 root를 넣어준다.
+        p = t->root;
+      }
+
+      // case 4 : 형제는 black, 형제 red자식이 1자일 경우
+      else {
+        // 형제는 부모 색 물려받기
+        // 부모/형제자식은 black으로 만들고 회전
+        // 이러면 doubly는 없어진다.
+        w->color = p->parent->color;
+        p->parent->color = RBTREE_BLACK;
+        w->left->color = RBTREE_BLACK;
+        right_rotate(t, p->parent);
+        
+        // case 4를 했으면 무조건 doubly가 없어지므로, while문 탈출을 위해 root를 넣어준다.
+        p = t->root;
+      }
+    }
+  }
+  p->color = RBTREE_BLACK;
+}
 
 
 // 주어진 arr에 node를 오름차순으로 넣기, 최대 n개 까지만1
@@ -362,4 +548,47 @@ void right_rotate(rbtree *t, node_t *y) {
   // 옮겨달았으니 x, y 관계역전
   x->right = y;
   y->parent = x;
+}
+
+
+
+// 노드 대체 함수, v를 u자리로 옮긴다
+void rbtree_transplant(rbtree *t, node_t *u, node_t *v) {
+
+  // u가 root였을 경우 v를 root로 설정
+  // 아니라면 left, right 중 맞는 자리로 설정
+  if(u->parent == t->nil) {
+    t->root = v;
+  }
+  else if(u == u->parent->left) {
+    u->parent->left = v;
+  }
+  else {
+    u->parent->right = v;
+  }
+  
+  // 부모 설정
+  v->parent = u->parent;
+}
+
+
+
+// 특정 노드의 후임자 찾기
+node_t *node_successor(rbtree *t, node_t *node) {
+
+  // TODO: implement find
+  node_t *cur = node->right;
+  node_t *mini;
+
+  // 후임자가 없을 경우 NULL 반환
+  if(cur == t->nil) {
+    return NULL;
+  }
+
+  while(cur != t->nil) {
+    mini = cur;
+    cur = cur->left;
+  }
+
+  return mini;
 }
